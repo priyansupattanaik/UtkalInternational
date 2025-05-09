@@ -6,7 +6,7 @@ import Home from '../screens/Home/Home';
 import WishListScreen from '../screens/WishList/WishListScreen';
 import CartScreen from '../screens/Cart/CartScreen'; // Make sure this file exists
 import ProfileScreen from '../screens/Profile/ProfileScreen';
-import CategoryScreen from '../screens/CategoryScreen';
+
 import ProductInfo from '../screens/ProductInfo';
 
 // Custom icons for each tab - we'll keep the same icons
@@ -24,7 +24,7 @@ function HomeStack() {
   return (
     <Stack.Navigator screenOptions={{headerShown: false}}>
       <Stack.Screen name="HomeTab" component={Home} />
-      <Stack.Screen name="CategoryScreen" component={CategoryScreen} />
+
       <Stack.Screen name="ProductInfo" component={ProductInfo} />
     </Stack.Navigator>
   );

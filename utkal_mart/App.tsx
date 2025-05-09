@@ -16,10 +16,8 @@ import EditProfileScreen from './src/screens/Profile/EditProfileScreen';
 import WishListScreen from './src/screens/WishList/WishListScreen';
 import CartScreen from './src/screens/Cart/CartScreen';
 import ProductInfo from './src/screens/ProductInfo';
-import CategoryScreen from './src/screens/CategoryScreen';
 import PaymentScreen from './src/screens/Payment/PaymentScreen';
-import OrderScreen from './src/screens/Order/OrderScreen';
-
+import PaymentProcessingScreen from './src/screens/Payment/PaymentProcessingScreen';
 // Context Providers
 import {ThemeProvider} from './src/utils/ThemeContext';
 import {FavoriteProvider} from './src/utils/FavoriteContext';
@@ -48,12 +46,15 @@ function AppNavigator() {
       <Stack.Screen name="Home" component={Home} />
       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-      <Stack.Screen name="OrderScreen" component={OrderScreen} />
+
       <Stack.Screen name="PaymentScreen" component={PaymentScreen} />
+      <Stack.Screen
+        name="PaymentProcessingScreen"
+        component={PaymentProcessingScreen}
+      />
       <Stack.Screen name="WishListScreen" component={WishListScreen} />
       <Stack.Screen name="CartScreen" component={CartScreen} />
       <Stack.Screen name="ProductInfo" component={ProductInfo} />
-      <Stack.Screen name="CategoryScreen" component={CategoryScreen} />
     </Stack.Navigator>
   );
 }
@@ -86,8 +87,6 @@ function App(): React.JSX.Element {
   return (
     <AuthProvider>
       <CartProvider>
-        {' '}
-        {/* Add the CartProvider here, after AuthProvider but before others */}
         <FavoriteProvider>
           <ThemeProvider>
             <SafeAreaProvider>

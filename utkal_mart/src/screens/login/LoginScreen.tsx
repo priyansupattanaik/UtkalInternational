@@ -87,11 +87,8 @@ const LoginScreen = ({navigation}) => {
 
     try {
       await login(phone.trim(), password, false);
-
-      navigation.reset({
-        index: 0,
-        routes: [{name: 'TabNavigator'}],
-      });
+      // No navigation call needed here - AppContainer will handle it automatically
+      // when isAuthenticated becomes true
     } catch (err) {
       if (err.message?.includes('Network Error')) {
         Alert.alert(
@@ -106,7 +103,7 @@ const LoginScreen = ({navigation}) => {
         );
       }
     }
-  }, [phone, password, login, navigation, validateForm]);
+  }, [phone, password, login, validateForm]);
 
   // Memoize navigation handlers
   const handleSignUp = useCallback(() => {
@@ -290,7 +287,7 @@ const LoginScreen = ({navigation}) => {
   );
 };
 
-// Extracted common styles
+// Styles remain the same
 const styles = StyleSheet.create({
   keyboardAvoidView: {
     flex: 1,

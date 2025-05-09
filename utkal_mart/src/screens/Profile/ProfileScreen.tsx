@@ -141,7 +141,7 @@ const ProfileScreen = () => {
     }
   };
 
-  // Logout handler - memoized
+  // Logout handler - fixed to avoid navigation reset error
   const handleLogout = useCallback(() => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       {
@@ -152,14 +152,13 @@ const ProfileScreen = () => {
         text: 'Logout',
         onPress: async () => {
           await logout();
-          navigation.reset({
-            index: 0,
-            routes: [{name: 'LoginScreen'}],
-          });
+          // No navigation code needed here
+          // AuthProvider will handle the state change and
+          // AppContainer will automatically render AuthNavigator
         },
       },
     ]);
-  }, [logout, navigation]);
+  }, [logout]);
 
   // View orders handler - memoized
   const handleViewOrders = useCallback(() => {

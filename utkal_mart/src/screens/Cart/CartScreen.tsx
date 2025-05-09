@@ -1,4 +1,5 @@
-import React, {useCallback, useState, useMemo} from 'react';
+// src/screens/Cart/CartScreen.tsx
+import React, {useCallback, useState, useMemo, useEffect} from 'react';
 import {
   View,
   Text,
@@ -15,12 +16,16 @@ import {
   Alert,
   Modal,
   Platform,
+  TextInput,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useAuth} from '../../context/AuthContext';
 import {useCart} from '../../context/CartContext';
 import API_CONFIG from '../../components/config';
 import {BlurView} from '@react-native-community/blur';
+
+// Get dimensions once
+const {width, height} = Dimensions.get('window');
 
 // Memoized icon paths
 const icons = {
@@ -30,17 +35,53 @@ const icons = {
   cart: require('../../assets/images/tabicons/cart.png'),
   checkout: require('../../assets/images/pageicons/checkout.png'),
   success: require('../../assets/images/icons/success.png'),
+  promo: require('../../assets/images/pageicons/promo.png'),
+  close: require('../../assets/images/icons/close.png'),
 };
 
-const {width} = Dimensions.get('window');
+// Sample promo codes - in a real app you would fetch these from your API
+const availablePromoCodes = [
+  {
+    id: '1',
+    code: 'WELCOME20',
+    discount: 20, // Percentage discount
+    description: '20% off on your first order',
+    expiryDate: '2025-12-31',
+    minimumAmount: 500,
+  },
+  {
+    id: '2',
+    code: 'SUMMER10',
+    discount: 10,
+    description: '10% off on all summer products',
+    expiryDate: '2025-09-30',
+    minimumAmount: 200,
+  },
+  {
+    id: '3',
+    code: 'FLAT100',
+    discount: 100, // Fixed amount discount
+    description: '₹100 off on orders above ₹1000',
+    expiryDate: '2025-06-30',
+    minimumAmount: 1000,
+    isFixed: true,
+  },
+];
 
 const CartScreen = () => {
   const navigation = useNavigation();
   const {token} = useAuth();
 
-  // State for success modal
-  const [successModalVisible, setSuccessModalVisible] = useState(false);
-  const [orderNumber, setOrderNumber] = useState('');
+  // State for modals
+  const [promoCodeModalVisible, setPromoCodeModalVisible] = useState(false);
+  const [checkedOutItems, setCheckedOutItems] = useState([]);
+
+  // State for promo code
+  const [appliedPromoCode, setAppliedPromoCode] = useState(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [finalTotal, setFinalTotal] = useState(0);
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [promoCodeError, setPromoCodeError] = useState('');
 
   // Cart context
   const {
@@ -56,11 +97,93 @@ const CartScreen = () => {
     clearCart,
   } = useCart();
 
-  // Background image
+  // Background image - memoized
   const backgroundImage = useMemo(
     () => require('../../assets/images/backgrounds/bg1.png'),
     [],
   );
+
+  // Set final total whenever cartTotal or discount changes
+  useEffect(() => {
+    if (appliedPromoCode) {
+      // Recalculate discount amount
+      calculateDiscount(appliedPromoCode);
+    } else {
+      setFinalTotal(cartTotal);
+    }
+  }, [cartTotal, appliedPromoCode]);
+
+  // Calculate discount based on promo code
+  const calculateDiscount = useCallback(
+    promoCode => {
+      let discount = 0;
+
+      if (cartTotal < promoCode.minimumAmount) {
+        setPromoCodeError(
+          `Minimum order amount of ₹${promoCode.minimumAmount} required`,
+        );
+        setAppliedPromoCode(null);
+        setDiscountAmount(0);
+        setFinalTotal(cartTotal);
+        return;
+      }
+
+      if (promoCode.isFixed) {
+        // Fixed amount discount
+        discount = promoCode.discount;
+      } else {
+        // Percentage discount
+        discount = (cartTotal * promoCode.discount) / 100;
+      }
+
+      // Cap discount to not exceed cart total
+      discount = Math.min(discount, cartTotal);
+
+      setDiscountAmount(discount);
+      setFinalTotal(cartTotal - discount);
+      setPromoCodeError('');
+    },
+    [cartTotal],
+  );
+
+  // Apply promo code
+  const applyPromoCode = useCallback(
+    promoCode => {
+      setAppliedPromoCode(promoCode);
+      calculateDiscount(promoCode);
+      setPromoCodeModalVisible(false);
+    },
+    [calculateDiscount],
+  );
+
+  // Remove applied promo code
+  const removePromoCode = useCallback(() => {
+    setAppliedPromoCode(null);
+    setDiscountAmount(0);
+    setFinalTotal(cartTotal);
+    setPromoCodeError('');
+  }, [cartTotal]);
+
+  // Handle manual promo code input
+  const handlePromoCodeSubmit = useCallback(() => {
+    if (!promoCodeInput.trim()) {
+      setPromoCodeError('Please enter a promo code');
+      return;
+    }
+
+    // Find the promo code in available codes
+    const promoCode = availablePromoCodes.find(
+      code => code.code === promoCodeInput.trim().toUpperCase(),
+    );
+
+    if (!promoCode) {
+      setPromoCodeError('Invalid promo code');
+      return;
+    }
+
+    applyPromoCode(promoCode);
+    setPromoCodeInput('');
+  }, [promoCodeInput, applyPromoCode]);
 
   // Pull-to-refresh handler
   const onRefresh = useCallback(() => {
@@ -100,31 +223,14 @@ const CartScreen = () => {
         {
           text: 'Clear',
           style: 'destructive',
-          onPress: clearCart,
+          onPress: () => {
+            clearCart();
+            removePromoCode();
+          },
         },
       ],
     );
-  }, [token, clearCart]);
-
-  // Generate a random order number
-  const generateOrderNumber = useCallback(() => {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 8; i++) {
-      result += characters.charAt(
-        Math.floor(Math.random() * characters.length),
-      );
-    }
-    return result;
-  }, []);
-
-  // Handle successful order
-  const handleOrderSuccess = useCallback(() => {
-    const newOrderNumber = generateOrderNumber();
-    setOrderNumber(newOrderNumber);
-    setSuccessModalVisible(true);
-    clearCart();
-  }, [generateOrderNumber, clearCart]);
+  }, [token, clearCart, removePromoCode]);
 
   // Process checkout
   const handleCheckout = useCallback(() => {
@@ -141,24 +247,34 @@ const CartScreen = () => {
       {
         text: 'Proceed',
         onPress: () => {
-          // Simulate payment processing
-          setTimeout(() => {
-            const checkedOutItems = [...cartItems];
-            handleOrderSuccess();
-            navigation.navigate('Profile', {
-              checkedOutItems: checkedOutItems,
-            });
-          }, 1500);
+          // Navigate to PaymentScreen with cart details and promo
+          navigation.navigate('PaymentScreen', {
+            items: cartItems,
+            subtotal: cartTotal,
+            discount: discountAmount,
+            finalTotal: finalTotal,
+            promoCode: appliedPromoCode ? appliedPromoCode.code : null,
+          });
         },
       },
     ]);
-  }, [cartItems, handleOrderSuccess, navigation]);
+  }, [
+    cartItems,
+    cartTotal,
+    discountAmount,
+    finalTotal,
+    appliedPromoCode,
+    navigation,
+  ]);
 
-  // Close success modal and navigate to home
-  const handleContinueShopping = useCallback(() => {
-    setSuccessModalVisible(false);
-    navigation.navigate('Home');
-  }, [navigation]);
+  // Modal handlers
+  const openPromoCodeModal = useCallback(() => {
+    setPromoCodeModalVisible(true);
+  }, []);
+
+  const closePromoCodeModal = useCallback(() => {
+    setPromoCodeModalVisible(false);
+  }, []);
 
   // Navigation handler
   const handleGoBack = useCallback(() => {
@@ -169,6 +285,44 @@ const CartScreen = () => {
   const navigateToHome = useCallback(() => {
     navigation.navigate('Home');
   }, [navigation]);
+
+  // Render promo code item
+  const renderPromoCodeItem = useCallback(
+    ({item}) => {
+      const isApplicable = cartTotal >= item.minimumAmount;
+
+      return (
+        <TouchableOpacity
+          style={[
+            styles.promoCodeItem,
+            !isApplicable && styles.promoCodeItemDisabled,
+          ]}
+          onPress={() => isApplicable && applyPromoCode(item)}
+          disabled={!isApplicable}
+          activeOpacity={0.7}>
+          <View style={styles.promoCodeHeader}>
+            <View style={styles.promoCodeBadge}>
+              <Text style={styles.promoCodeBadgeText}>{item.code}</Text>
+            </View>
+            {isApplicable ? (
+              <Text style={styles.applyText}>Apply</Text>
+            ) : (
+              <Text style={styles.minimumAmountText}>
+                Min: ₹{item.minimumAmount}
+              </Text>
+            )}
+          </View>
+
+          <Text style={styles.promoCodeDescription}>{item.description}</Text>
+
+          <Text style={styles.promoCodeExpiry}>
+            Valid till: {new Date(item.expiryDate).toLocaleDateString()}
+          </Text>
+        </TouchableOpacity>
+      );
+    },
+    [cartTotal, applyPromoCode],
+  );
 
   // Render cart item (memoized)
   const renderCartItem = useCallback(
@@ -378,9 +532,62 @@ const CartScreen = () => {
               </View>
 
               <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total Amount</Text>
+                <Text style={styles.totalLabel}>Subtotal</Text>
+                <Text style={styles.totalValue}>₹{cartTotal.toFixed(2)}</Text>
+              </View>
+
+              {/* Applied Promo Code Section */}
+              {appliedPromoCode ? (
+                <View style={styles.appliedPromoContainer}>
+                  <View style={styles.appliedPromoRow}>
+                    <View style={styles.appliedPromoInfo}>
+                      <Text style={styles.appliedPromoLabel}>
+                        Applied Promo:
+                      </Text>
+                      <Text style={styles.appliedPromoCode}>
+                        {appliedPromoCode.code}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.removePromoButton}
+                      onPress={removePromoCode}
+                      activeOpacity={0.7}>
+                      <Image
+                        source={icons.close}
+                        style={styles.removePromoIcon}
+                        tintColor="#FF3B30"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.totalRow}>
+                    <Text style={styles.discountLabel}>Discount</Text>
+                    <Text style={styles.discountValue}>
+                      -₹{discountAmount.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.promoButton}
+                  onPress={openPromoCodeModal}
+                  activeOpacity={0.7}>
+                  <Image
+                    source={icons.promo}
+                    style={styles.promoIcon}
+                    tintColor="#007AFF"
+                  />
+                  <Text style={styles.promoButtonText}>Apply Promo Code</Text>
+                </TouchableOpacity>
+              )}
+
+              {promoCodeError ? (
+                <Text style={styles.promoErrorText}>{promoCodeError}</Text>
+              ) : null}
+
+              <View style={[styles.totalRow, styles.finalTotalRow]}>
+                <Text style={styles.finalTotalLabel}>Total Amount</Text>
                 <Text style={styles.cartTotalText}>
-                  ₹{cartTotal.toFixed(2)}
+                  ₹{finalTotal.toFixed(2)}
                 </Text>
               </View>
 
@@ -394,43 +601,69 @@ const CartScreen = () => {
           </View>
         )}
 
-        {/* Order Success Modal */}
+        {/* Additional blur overlay for modals */}
+        {promoCodeModalVisible && <View style={styles.modalBackdrop} />}
+
+        {/* Promo Code Modal */}
         <Modal
-          animationType="fade"
+          animationType="slide"
           transparent={true}
-          visible={successModalVisible}
-          onRequestClose={() => setSuccessModalVisible(false)}>
+          visible={promoCodeModalVisible}
+          onRequestClose={closePromoCodeModal}>
           <View style={styles.modalOverlay}>
-            <View style={styles.successModalContainer}>
-              <View style={styles.successIconContainer}>
-                <Image
-                  source={icons.success}
-                  style={styles.successIcon}
-                  tintColor="#34C759"
+            <View style={styles.promoModalContainer}>
+              <View style={styles.promoModalHeader}>
+                <Text style={styles.promoModalTitle}>
+                  Available Promo Codes
+                </Text>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={closePromoCodeModal}
+                  activeOpacity={0.7}>
+                  <Image
+                    source={icons.close}
+                    style={styles.closeIcon}
+                    tintColor="#FFFFFF"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Manual Promo Code Input */}
+              <View style={styles.promoInputContainer}>
+                <TextInput
+                  style={styles.promoInput}
+                  placeholder="Enter promo code"
+                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  value={promoCodeInput}
+                  onChangeText={setPromoCodeInput}
+                  autoCapitalize="characters"
                 />
+                <TouchableOpacity
+                  style={styles.promoSubmitButton}
+                  onPress={handlePromoCodeSubmit}
+                  activeOpacity={0.7}>
+                  <Text style={styles.promoSubmitText}>Apply</Text>
+                </TouchableOpacity>
               </View>
 
-              <Text style={styles.successTitle}>Order Successful!</Text>
+              <View style={styles.divider} />
 
-              <Text style={styles.successMessage}>
-                Your order has been placed successfully.
-              </Text>
-
-              <View style={styles.orderNumberContainer}>
-                <Text style={styles.orderNumberLabel}>Order Number:</Text>
-                <Text style={styles.orderNumberValue}>{orderNumber}</Text>
-              </View>
-
-              <Text style={styles.thanksMessage}>
-                Thank you for shopping with us!
-              </Text>
-
-              <TouchableOpacity
-                style={styles.continueButton}
-                onPress={handleContinueShopping}
-                activeOpacity={0.8}>
-                <Text style={styles.continueButtonText}>Continue Shopping</Text>
-              </TouchableOpacity>
+              {availablePromoCodes.length > 0 ? (
+                <FlatList
+                  data={availablePromoCodes}
+                  renderItem={renderPromoCodeItem}
+                  keyExtractor={item => item.id}
+                  contentContainerStyle={styles.promoCodeList}
+                  ItemSeparatorComponent={() => <View style={{height: 10}} />}
+                  showsVerticalScrollIndicator={false}
+                />
+              ) : (
+                <View style={styles.noPromoContainer}>
+                  <Text style={styles.noPromoText}>
+                    No promo codes available at the moment
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </Modal>
@@ -450,6 +683,11 @@ const styles = StyleSheet.create({
   overlayBackground: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    zIndex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -498,7 +736,7 @@ const styles = StyleSheet.create({
   },
   cartList: {
     paddingHorizontal: 16,
-    paddingBottom: 270, // Extra space for bottom total section
+    paddingBottom: 388, // Extra space for bottom total section
   },
   cartItemContainer: {
     backgroundColor: 'rgba(40, 40, 40, 0.75)',
@@ -701,7 +939,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20, 20, 20, 0.95)',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 78,
+    paddingBottom: 74,
+    zIndex: 2,
   },
   totalsContent: {
     padding: 16,
@@ -713,23 +952,254 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
   totalValue: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
   },
   cartTotalText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#007AFF',
   },
+
+  // Promo Code styles
+  promoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.15)',
+    borderRadius: 12,
+    padding: 10,
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.3)',
+  },
+  promoIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 8,
+  },
+  promoButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  promoErrorText: {
+    fontSize: 12,
+    color: '#FF3B30',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  appliedPromoContainer: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    borderRadius: 12,
+    padding: 10,
+    marginVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.2)',
+  },
+  appliedPromoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  appliedPromoInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  appliedPromoLabel: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginRight: 8,
+  },
+  appliedPromoCode: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  removePromoButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 59, 48, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.3)',
+  },
+  removePromoIcon: {
+    width: 12,
+    height: 12,
+  },
+  discountLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#34C759',
+  },
+  discountValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#34C759',
+  },
+  finalTotalRow: {
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    marginTop: 8,
+  },
+  totalLabel: {
+    color: 'white',
+  },
+  finalTotalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+
+  // Promo Code Modal styles
+  promoModalContainer: {
+    width: width * 0.9,
+    backgroundColor: 'rgb(30, 30, 30)',
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    maxHeight: height * 0.7,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 10},
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+    zIndex: 3,
+  },
+  promoModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  promoModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 59, 48, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  closeIcon: {
+    width: 14,
+    height: 14,
+  },
+  promoInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  promoInput: {
+    flex: 1,
+    height: 48,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    color: '#FFFFFF',
+    fontWeight: '500',
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  promoSubmitButton: {
+    height: 48,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(0, 122, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  promoSubmitText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 16,
+  },
+  promoCodeList: {
+    paddingTop: 8,
+  },
+  promoCodeItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  promoCodeItemDisabled: {
+    opacity: 0.6,
+  },
+  promoCodeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  promoCodeBadge: {
+    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.3)',
+  },
+  promoCodeBadgeText: {
+    color: '#007AFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  applyText: {
+    color: '#34C759',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  minimumAmountText: {
+    color: '#FF9500',
+    fontSize: 12,
+  },
+  promoCodeDescription: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  promoCodeExpiry: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 12,
+  },
+  noPromoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  noPromoText: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+    fontSize: 14,
+  },
+
   checkoutButton: {
-    marginTop: 12,
+    marginTop: 4,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -744,100 +1214,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // Success Modal Styles
+  // Modal Overlay
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.14)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  successModalContainer: {
-    width: width * 0.85,
-    backgroundColor: 'rgba(40, 40, 40, 0.95)',
-    borderRadius: 20,
-    paddingVertical: 24,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 10},
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  successIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(52, 199, 89, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(52, 199, 89, 0.4)',
-  },
-  successIcon: {
-    width: 40,
-    height: 40,
-  },
-  successTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  successMessage: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  orderNumberContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginBottom: 24,
-    width: '100%',
-    alignItems: 'center',
-  },
-  orderNumberLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginBottom: 4,
-  },
-  orderNumberValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 1,
-  },
-  thanksMessage: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  continueButton: {
-    width: '100%',
-    paddingVertical: 16,
-    backgroundColor: 'rgba(0, 122, 255, 0.9)',
-    borderRadius: 14,
-    alignItems: 'center',
-    shadowColor: '#007AFF',
-    shadowOffset: {width: 0, height: 5},
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  continueButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 0.2,
+    zIndex: 3,
   },
 });
 
