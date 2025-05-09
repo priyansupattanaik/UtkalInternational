@@ -23,8 +23,8 @@ const {width, height} = Dimensions.get('window');
 // Memoized icon paths
 const icons = {
   success: require('../../assets/images/icons/success.png'),
-  truck: require('../../assets/images/pageicons/checkout.png'),
-  calendar: require('../../assets/images/pageicons/arrow.png'),
+  truck: require('../../assets/images/pageicons/truck.png'),
+  calendar: require('../../assets/images/pageicons/calender.png'),
 };
 
 const PaymentProcessingScreen = () => {

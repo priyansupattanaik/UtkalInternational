@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
   },
   bannerContainer: {
     width: width - 32, // Account for padding
-    height: 180,
+    height: 190,
     borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
@@ -887,7 +887,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: '100%',
     height: 150, // Slightly taller
-    padding: 10,
+    padding: 0,
     position: 'relative',
   },
   productImage: {

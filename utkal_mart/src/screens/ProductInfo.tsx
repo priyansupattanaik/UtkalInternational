@@ -237,7 +237,7 @@ export default function ProductInfo() {
             {/* Description */}
             <View style={styles.descriptionContainer}>
               <Text style={styles.descriptionTitle}>Description</Text>
-              <Text style={styles.description} numberOfLines={4}>
+              <Text style={styles.description} numberOfLines={5}>
                 {product.description || 'No description available.'}
               </Text>
             </View>
@@ -297,8 +297,8 @@ const styles = StyleSheet.create({
   },
   imageCard: {
     height: height * 0.35,
-    padding: 10,
-    borderRadius: 16,
+    padding: 0,
+    borderRadius: 0,
     overflow: 'hidden',
     marginBottom: 0,
   },
