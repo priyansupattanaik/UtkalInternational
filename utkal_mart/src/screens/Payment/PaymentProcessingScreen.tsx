@@ -1,4 +1,3 @@
-// src/screens/Payment/PaymentProcessingScreen.tsx
 import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {
   View,

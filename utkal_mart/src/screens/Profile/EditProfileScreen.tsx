@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
   },
   overlayBackground: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   loadingContainer: {
     flex: 1,
@@ -419,10 +419,10 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -431,10 +431,10 @@ const styles = StyleSheet.create({
     height: 20,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 0.2,
+    fontSize: 20,
+    fontWeight: '800',
+    color: 'white',
+    letterSpacing: 1,
   },
   formContainer: {
     paddingHorizontal: 16,
@@ -442,21 +442,21 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   formCard: {
-    backgroundColor: 'rgba(40, 40, 40, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 12,
     overflow: 'hidden',
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
-    marginBottom: 14,
+    marginBottom: 12,
     letterSpacing: 0.2,
   },
   inputGroup: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   label: {
     fontSize: 14,
@@ -468,7 +468,6 @@ const styles = StyleSheet.create({
   inputContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 12,
-
     overflow: 'hidden',
   },
   inputContainerError: {
