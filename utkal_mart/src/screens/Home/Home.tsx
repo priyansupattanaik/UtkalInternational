@@ -437,7 +437,9 @@ const Home: React.FC<HomeProps> = ({route}) => {
         <View style={styles.header}>
           <View style={styles.userInfoContainer}>
             <Text style={styles.greeting}>Hello, {userName}</Text>
-            <Text style={styles.subGreeting}>Find what you love!</Text>
+            <Text style={styles.subGreeting}>
+              Sourcing best organic products!
+            </Text>
           </View>
 
           {/* Cart Icon Button with Badge */}
