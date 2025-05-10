@@ -14,21 +14,44 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
+  StatusBar,
 } from 'react-native';
 import {useAuth} from '../../context/AuthContext';
 import {BlurView} from '@react-native-community/blur';
+import {StackNavigationProp} from '@react-navigation/stack';
 
 const {width, height} = Dimensions.get('window');
 
-const SignupScreen = ({navigation}) => {
+// Define navigation prop type
+type SignupScreenNavigationProp = StackNavigationProp<any, 'SignupScreen'>;
+
+interface SignupScreenProps {
+  navigation: SignupScreenNavigationProp;
+}
+
+// Define error state type
+interface FormErrors {
+  name?: string;
+  phone?: string;
+  password?: string;
+  confirmPassword?: string;
+}
+
+const SignupScreen: React.FC<SignupScreenProps> = ({navigation}) => {
+  // Input refs for focus management
+  const phoneInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const confirmPasswordInputRef = useRef<TextInput>(null);
+
   // State management
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState<FormErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -54,12 +77,6 @@ const SignupScreen = ({navigation}) => {
     () => require('../../assets/images/icons/password.png'),
     [],
   );
-  const confirmLockIcon = useMemo(
-    () => require('../../assets/images/icons/password.png'),
-    [],
-  );
-
-  // Show/hide password icons
   const showPasswordIcon = useMemo(
     () => require('../../assets/images/icons/unhide.png'),
     [],
@@ -69,8 +86,37 @@ const SignupScreen = ({navigation}) => {
     [],
   );
 
+  // Clear errors when inputs change
+  useEffect(() => {
+    if (errors.name && name) {
+      setErrors(prev => ({...prev, name: undefined}));
+    }
+  }, [name, errors.name]);
+
+  useEffect(() => {
+    if (errors.phone && phone) {
+      setErrors(prev => ({...prev, phone: undefined}));
+    }
+  }, [phone, errors.phone]);
+
+  useEffect(() => {
+    if (errors.password && password) {
+      setErrors(prev => ({...prev, password: undefined}));
+    }
+  }, [password, errors.password]);
+
+  useEffect(() => {
+    if (errors.confirmPassword && confirmPassword) {
+      setErrors(prev => ({...prev, confirmPassword: undefined}));
+    }
+  }, [confirmPassword, errors.confirmPassword]);
+
   // Animation setup
   useEffect(() => {
+    // Reset animation values to prevent issues on remount
+    fadeAnim.setValue(0);
+    slideAnim.setValue(50);
+
     const animation = Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -86,21 +132,27 @@ const SignupScreen = ({navigation}) => {
 
     animation.start();
 
+    // Cleanup
     return () => {
       animation.stop();
     };
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   // Form validation
   const validateForm = useCallback(() => {
-    const formErrors = {};
+    const formErrors: FormErrors = {};
     let isValid = true;
 
+    // Name validation
     if (!name.trim()) {
       formErrors.name = 'Name is required';
       isValid = false;
+    } else if (name.trim().length < 3) {
+      formErrors.name = 'Name must be at least 3 characters';
+      isValid = false;
     }
 
+    // Phone validation
     if (!phone.trim()) {
       formErrors.phone = 'Mobile number is required';
       isValid = false;
@@ -109,6 +161,7 @@ const SignupScreen = ({navigation}) => {
       isValid = false;
     }
 
+    // Password validation
     if (!password) {
       formErrors.password = 'Password is required';
       isValid = false;
@@ -117,7 +170,11 @@ const SignupScreen = ({navigation}) => {
       isValid = false;
     }
 
-    if (password !== confirmPassword) {
+    // Confirm password validation
+    if (!confirmPassword) {
+      formErrors.confirmPassword = 'Please confirm your password';
+      isValid = false;
+    } else if (password !== confirmPassword) {
       formErrors.confirmPassword = 'Passwords do not match';
       isValid = false;
     }
@@ -126,16 +183,32 @@ const SignupScreen = ({navigation}) => {
     return isValid;
   }, [name, phone, password, confirmPassword]);
 
+  // Input submission handlers
+  const handleNameSubmit = useCallback(() => {
+    phoneInputRef.current?.focus();
+  }, []);
+
+  const handlePhoneSubmit = useCallback(() => {
+    passwordInputRef.current?.focus();
+  }, []);
+
+  const handlePasswordSubmit = useCallback(() => {
+    confirmPasswordInputRef.current?.focus();
+  }, []);
+
   // Handle signup
   const handleSignup = useCallback(async () => {
+    if (isSubmitting || loading) return;
+
     if (!validateForm()) {
       return;
     }
 
     try {
+      setIsSubmitting(true);
       const signupData = {
-        name,
-        phone,
+        name: name.trim(),
+        phone: phone.trim(),
         password,
         role: 'buyer',
       };
@@ -148,10 +221,30 @@ const SignupScreen = ({navigation}) => {
           onPress: () => navigation.navigate('LoginScreen'),
         },
       ]);
-    } catch (err) {
-      // Error is already handled in the context
+    } catch (err: any) {
+      // Show more specific error message if available
+      if (err?.response?.data?.message) {
+        Alert.alert('Registration Failed', err.response.data.message);
+      } else if (err.message?.includes('Network Error')) {
+        Alert.alert(
+          'Connection Error',
+          'Please check your internet connection and try again.',
+        );
+      }
+      // Other errors are already handled in the context
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [name, phone, password, navigation, register, validateForm]);
+  }, [
+    name,
+    phone,
+    password,
+    navigation,
+    register,
+    validateForm,
+    isSubmitting,
+    loading,
+  ]);
 
   // Toggle password visibility
   const togglePasswordVisibility = useCallback(() => {
@@ -172,53 +265,77 @@ const SignupScreen = ({navigation}) => {
     navigation.navigate('TermsAndConditionsScreen');
   }, [navigation]);
 
+  // Check if button should be disabled
+  const isButtonDisabled = useMemo(
+    () => loading || isSubmitting,
+    [loading, isSubmitting],
+  );
+
+  // Memoize animated style
+  const animatedStyle = useMemo(
+    () => ({
+      opacity: fadeAnim,
+      transform: [{translateY: slideAnim}],
+    }),
+    [fadeAnim, slideAnim],
+  );
+
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{flex: 1}}>
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      style={styles.keyboardAvoidView}>
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+
       <ScrollView
-        contentContainerStyle={{flexGrow: 1}}
+        contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        bounces={false}>
         <ImageBackground
           style={styles.container}
           source={backgroundImage}
           resizeMode="cover">
           {/* BlurView for glass effect */}
-          <BlurView
-            style={styles.blurOverlay}
-            blurType="dark"
-            blurAmount={10}
-            reducedTransparencyFallbackColor="rgba(0, 0, 0, 0.7)"
-          />
+          {Platform.OS === 'ios' ? (
+            <BlurView
+              style={styles.blurOverlay}
+              blurType="dark"
+              blurAmount={10}
+              reducedTransparencyFallbackColor="rgba(0, 0, 0, 0.7)"
+            />
+          ) : (
+            <View style={styles.androidBlurOverlay} />
+          )}
 
-          <Animated.View
-            style={[
-              styles.formContainer,
-              {
-                opacity: fadeAnim,
-                transform: [{translateY: slideAnim}],
-              },
-            ]}>
+          <Animated.View style={[styles.formContainer, animatedStyle]}>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Join Utkal International</Text>
 
             {/* Name Input */}
             <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  errors.name && styles.inputWrapperError,
+                ]}>
                 <View style={styles.inputIcon}>
                   <Image
                     source={userIcon}
-                    style={styles.visibilityIcon}
+                    style={styles.iconImage}
                     resizeMode="contain"
                   />
                 </View>
                 <TextInput
-                  style={[styles.input, errors.name ? styles.inputError : null]}
+                  style={styles.input}
                   placeholder="Full Name"
                   placeholderTextColor="rgba(255, 255, 255, 0.6)"
                   value={name}
                   onChangeText={setName}
+                  returnKeyType="next"
+                  onSubmitEditing={handleNameSubmit}
+                  autoCapitalize="words"
+                  editable={!isSubmitting && !loading}
                 />
               </View>
               {errors.name ? (
@@ -228,24 +345,30 @@ const SignupScreen = ({navigation}) => {
 
             {/* Phone Input */}
             <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  errors.phone && styles.inputWrapperError,
+                ]}>
                 <View style={styles.inputIcon}>
                   <Image
                     source={phoneIcon}
-                    style={styles.visibilityIcon}
+                    style={styles.iconImage}
                     resizeMode="contain"
                   />
                 </View>
                 <TextInput
-                  style={[
-                    styles.input,
-                    errors.phone ? styles.inputError : null,
-                  ]}
+                  ref={phoneInputRef}
+                  style={styles.input}
                   placeholder="Mobile Number"
                   placeholderTextColor="rgba(255, 255, 255, 0.6)"
                   keyboardType="phone-pad"
                   value={phone}
                   onChangeText={setPhone}
+                  returnKeyType="next"
+                  onSubmitEditing={handlePhoneSubmit}
+                  editable={!isSubmitting && !loading}
+                  maxLength={15}
                 />
               </View>
               {errors.phone ? (
@@ -255,29 +378,37 @@ const SignupScreen = ({navigation}) => {
 
             {/* Password Input */}
             <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  errors.password && styles.inputWrapperError,
+                ]}>
                 <View style={styles.inputIcon}>
                   <Image
                     source={lockIcon}
-                    style={styles.visibilityIcon}
+                    style={styles.iconImage}
                     resizeMode="contain"
                   />
                 </View>
                 <TextInput
-                  style={[
-                    styles.input,
-                    errors.password ? styles.inputError : null,
-                  ]}
+                  ref={passwordInputRef}
+                  style={styles.input}
                   placeholder="Password"
                   placeholderTextColor="rgba(255, 255, 255, 0.6)"
                   secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={setPassword}
+                  returnKeyType="next"
+                  onSubmitEditing={handlePasswordSubmit}
+                  editable={!isSubmitting && !loading}
+                  autoCapitalize="none"
                 />
                 <TouchableOpacity
                   style={styles.visibilityButton}
                   onPress={togglePasswordVisibility}
-                  activeOpacity={0.7}>
+                  activeOpacity={0.7}
+                  disabled={isSubmitting || loading}
+                  hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
                   <Image
                     source={showPassword ? hidePasswordIcon : showPasswordIcon}
                     style={styles.visibilityIcon}
@@ -292,29 +423,37 @@ const SignupScreen = ({navigation}) => {
 
             {/* Confirm Password Input */}
             <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  errors.confirmPassword && styles.inputWrapperError,
+                ]}>
                 <View style={styles.inputIcon}>
                   <Image
-                    source={confirmLockIcon}
-                    style={styles.visibilityIcon}
+                    source={lockIcon}
+                    style={styles.iconImage}
                     resizeMode="contain"
                   />
                 </View>
                 <TextInput
-                  style={[
-                    styles.input,
-                    errors.confirmPassword ? styles.inputError : null,
-                  ]}
+                  ref={confirmPasswordInputRef}
+                  style={styles.input}
                   placeholder="Confirm Password"
                   placeholderTextColor="rgba(255, 255, 255, 0.6)"
                   secureTextEntry={!showConfirmPassword}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSignup}
+                  editable={!isSubmitting && !loading}
+                  autoCapitalize="none"
                 />
                 <TouchableOpacity
                   style={styles.visibilityButton}
                   onPress={toggleConfirmPasswordVisibility}
-                  activeOpacity={0.7}>
+                  activeOpacity={0.7}
+                  disabled={isSubmitting || loading}
+                  hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
                   <Image
                     source={
                       showConfirmPassword ? hidePasswordIcon : showPasswordIcon
@@ -333,25 +472,44 @@ const SignupScreen = ({navigation}) => {
 
             {/* Sign Up Button */}
             <TouchableOpacity
-              style={styles.loginButton}
+              style={[
+                styles.signupButton,
+                isButtonDisabled && styles.signupButtonDisabled,
+              ]}
               onPress={handleSignup}
               activeOpacity={0.8}
-              disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color="#ffffff" />
+              disabled={isButtonDisabled}>
+              {loading || isSubmitting ? (
+                <ActivityIndicator color="#ffffff" size="small" />
               ) : (
-                <Text style={styles.loginButtonText}>Sign Up</Text>
+                <Text style={styles.signupButtonText}>Sign Up</Text>
               )}
             </TouchableOpacity>
 
             {/* Login Link */}
-            <View style={styles.signupContainer}>
-              <Text style={styles.noAccountText}>
+            <View style={styles.loginContainer}>
+              <Text style={styles.haveAccountText}>
                 Already have an account?{' '}
               </Text>
-              <TouchableOpacity onPress={handleNavigateToLogin}>
-                <Text style={styles.signUpText}>Sign In</Text>
+              <TouchableOpacity
+                onPress={handleNavigateToLogin}
+                disabled={isSubmitting || loading}
+                hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                <Text style={styles.loginText}>Sign In</Text>
               </TouchableOpacity>
+            </View>
+
+            {/* Terms and Conditions */}
+            <View style={styles.termsContainer}>
+              <Text style={styles.termsText}>
+                By signing up, you agree to our{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={handleTermsAndConditions}>
+                  Terms & Conditions
+                </Text>{' '}
+                and Privacy Policy
+              </Text>
             </View>
           </Animated.View>
         </ImageBackground>
@@ -361,6 +519,14 @@ const SignupScreen = ({navigation}) => {
 };
 
 const styles = StyleSheet.create({
+  keyboardAvoidView: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    minHeight: '100%',
+  },
   container: {
     flex: 1,
     backgroundColor: '#000',
@@ -369,10 +535,16 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
+  androidBlurOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  },
   formContainer: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: width > 400 ? 40 : 32,
+    paddingTop: 20,
+    paddingBottom: 20,
   },
   title: {
     fontSize: 24,
@@ -392,7 +564,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   inputContainer: {
-    marginBottom: 10,
+    marginBottom: 16,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -403,6 +575,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.18)',
   },
+  inputWrapperError: {
+    borderColor: 'rgba(255, 69, 58, 0.8)', // Apple iOS red
+  },
   inputIcon: {
     padding: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
@@ -410,7 +585,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 56,
   },
-  visibilityIcon: {
+  iconImage: {
     width: 22,
     height: 22,
     tintColor: 'rgba(255, 255, 255, 0.8)',
@@ -420,11 +595,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     paddingVertical: 16,
     paddingHorizontal: 16,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '400',
-  },
-  inputError: {
-    borderColor: 'rgba(255, 69, 58, 0.8)', // Apple iOS red
   },
   errorText: {
     color: 'rgba(255, 69, 58, 0.9)', // Apple iOS red
@@ -439,9 +611,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loginButton: {
+  visibilityIcon: {
+    width: 22,
+    height: 22,
+    tintColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  signupButton: {
     backgroundColor: 'rgba(0, 122, 255, 0.9)', // Apple iOS blue with slight transparency
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 18,
@@ -458,31 +635,35 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  loginButtonText: {
+  signupButtonDisabled: {
+    backgroundColor: 'rgba(0, 122, 255, 0.5)',
+    shadowOpacity: 0.15,
+  },
+  signupButtonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
-  signupContainer: {
+  loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 16,
   },
-  noAccountText: {
+  haveAccountText: {
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 16,
     fontWeight: '400',
   },
-  signUpText: {
+  loginText: {
     color: 'rgba(10, 132, 255, 1)', // Apple iOS blue
     fontSize: 16,
     fontWeight: '600',
   },
   termsContainer: {
-    marginTop: 50,
-    marginBottom: 10,
+    marginTop: 36,
+    marginBottom: 20,
     alignItems: 'center',
     paddingHorizontal: 20,
   },

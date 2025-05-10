@@ -14,8 +14,9 @@ import {
 import {useNavigation} from '@react-navigation/native';
 import {useFavorite} from '../../utils/FavoriteContext';
 import {BlurView} from '@react-native-community/blur';
+import API_CONFIG from '../../components/config';
 
-const WishlistScreen = () => {
+const WishListScreen = () => {
   const {favorites, toggleFavorite} = useFavorite();
   const navigation = useNavigation();
 
@@ -30,6 +31,10 @@ const WishlistScreen = () => {
   );
   const heartIcon = useMemo(
     () => require('../../assets/images/tabicons/heart.png'),
+    [],
+  );
+  const defaultProductImage = useMemo(
+    () => require('../../assets/images/producticons/All.png'),
     [],
   );
 
@@ -57,13 +62,20 @@ const WishlistScreen = () => {
     [toggleFavorite],
   );
 
+  // Get correct image URL - memoized
+  const getImageUrl = useCallback(imageUrl => {
+    if (!imageUrl) return null;
+
+    return imageUrl.startsWith('http')
+      ? imageUrl
+      : `${API_CONFIG.BASE_URL}${imageUrl}`;
+  }, []);
+
   // Render wishlist item - memoized
   const renderWishlistItem = useCallback(
     ({item}) => {
       // Ensure image URL is properly formatted
-      const imageUrl = item.image.startsWith('http')
-        ? item.image
-        : `http://10.8.219.31:5000${item.image}`;
+      const imageUrl = getImageUrl(item.image);
 
       return (
         <TouchableOpacity
@@ -72,38 +84,90 @@ const WishlistScreen = () => {
           activeOpacity={0.8}>
           <View style={styles.productImageContainer}>
             <Image
-              source={{uri: imageUrl}}
+              source={imageUrl ? {uri: imageUrl} : defaultProductImage}
               style={styles.productImage}
-              defaultSource={require('../../assets/images/producticons/All.png')}
+              defaultSource={defaultProductImage}
+              // Add loading placeholder and error handling
+              onError={() =>
+                console.log(`Failed to load image for ${item.title}`)
+              }
+              fadeDuration={200}
             />
           </View>
 
           <View style={styles.textContainer}>
-            <Text style={styles.productTitle} numberOfLines={1}>
-              {item.title}
+            <Text
+              style={styles.productTitle}
+              numberOfLines={1}
+              ellipsizeMode="tail">
+              {item.title || 'Unnamed Product'}
             </Text>
 
-            <Text style={styles.productDescription} numberOfLines={2}>
+            <Text
+              style={styles.productDescription}
+              numberOfLines={2}
+              ellipsizeMode="tail">
               {item.description || 'No description available'}
             </Text>
 
-            <Text style={styles.priceText}>₹{item.price}</Text>
+            <Text style={styles.priceText}>
+              ₹
+              {typeof item.price === 'number'
+                ? item.price.toLocaleString()
+                : item.price}
+            </Text>
 
             <TouchableOpacity
               style={styles.removeButton}
               onPress={() => handleRemoveFromWishlist(item)}
-              activeOpacity={0.7}>
+              activeOpacity={0.7}
+              hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
               <Text style={styles.removeButtonText}>Remove</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       );
     },
-    [navigateToProduct, handleRemoveFromWishlist],
+    [
+      navigateToProduct,
+      handleRemoveFromWishlist,
+      getImageUrl,
+      defaultProductImage,
+    ],
+  );
+
+  // Key extractor - memoized
+  const keyExtractor = useCallback(
+    item => item.id?.toString() || Math.random().toString(),
+    [],
   );
 
   // Separator for FlatList - memoized
-  const ItemSeparator = useCallback(() => <View style={{height: 12}} />, []);
+  const ItemSeparator = useCallback(
+    () => <View style={styles.separator} />,
+    [],
+  );
+
+  // Empty component - memoized
+  const EmptyComponent = useCallback(
+    () => (
+      <View style={styles.emptyContainer}>
+        <Image
+          source={heartIcon}
+          style={styles.emptyIcon}
+          tintColor="rgba(255, 255, 255, 0.3)"
+        />
+        <Text style={styles.emptyText}>Your wishlist is empty</Text>
+        <TouchableOpacity
+          style={styles.browseButton}
+          onPress={navigateToHome}
+          activeOpacity={0.8}>
+          <Text style={styles.browseButtonText}>Browse Products</Text>
+        </TouchableOpacity>
+      </View>
+    ),
+    [heartIcon, navigateToHome],
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -130,7 +194,8 @@ const WishlistScreen = () => {
           <TouchableOpacity
             style={styles.backButton}
             onPress={handleGoBack}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
             <Image
               source={backIcon}
               style={styles.backIcon}
@@ -140,39 +205,25 @@ const WishlistScreen = () => {
 
           <Text style={styles.headerTitle}>WISHLIST</Text>
 
-          <View style={{width: 40}} />
+          <View style={styles.headerRightPlaceholder} />
         </View>
 
         {/* Content */}
         <View style={styles.contentContainer}>
-          {favorites.length > 0 ? (
-            <FlatList
-              data={favorites}
-              renderItem={renderWishlistItem}
-              keyExtractor={item => item.id.toString()}
-              contentContainerStyle={styles.wishlistContainer}
-              showsVerticalScrollIndicator={false}
-              ItemSeparatorComponent={ItemSeparator}
-              initialNumToRender={8}
-              maxToRenderPerBatch={8}
-              windowSize={5}
-            />
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Image
-                source={heartIcon}
-                style={styles.emptyIcon}
-                tintColor="rgba(255, 255, 255, 0.3)"
-              />
-              <Text style={styles.emptyText}>Your wishlist is empty</Text>
-              <TouchableOpacity
-                style={styles.browseButton}
-                onPress={navigateToHome}
-                activeOpacity={0.8}>
-                <Text style={styles.browseButtonText}>Browse Products</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          <FlatList
+            data={favorites}
+            renderItem={renderWishlistItem}
+            keyExtractor={keyExtractor}
+            contentContainerStyle={styles.wishlistContainer}
+            showsVerticalScrollIndicator={false}
+            ItemSeparatorComponent={ItemSeparator}
+            initialNumToRender={6}
+            maxToRenderPerBatch={6}
+            windowSize={5}
+            removeClippedSubviews={true}
+            ListEmptyComponent={EmptyComponent}
+            keyboardShouldPersistTaps="handled"
+          />
         </View>
       </ImageBackground>
     </SafeAreaView>
@@ -217,6 +268,9 @@ const styles = StyleSheet.create({
     color: 'white',
     letterSpacing: 1,
   },
+  headerRightPlaceholder: {
+    width: 32,
+  },
   contentContainer: {
     flex: 1,
     paddingHorizontal: 16,
@@ -225,8 +279,8 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   wishlistContainer: {
-    // paddingTop: 2,
-    paddingBottom: 76,
+    paddingBottom: 100, // Increased to avoid tab bar overlap
+    flexGrow: 1,
   },
   wishlistCard: {
     flexDirection: 'row',
@@ -240,6 +294,7 @@ const styles = StyleSheet.create({
     height: 70,
     borderRadius: 12,
     overflow: 'hidden',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   productImage: {
     width: '100%',
@@ -285,8 +340,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-
     borderRadius: 30,
+    minHeight: 300,
   },
   emptyIcon: {
     width: 52,
@@ -312,6 +367,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
+  separator: {
+    height: 12,
+  },
 });
 
-export default WishlistScreen;
+export default WishListScreen;

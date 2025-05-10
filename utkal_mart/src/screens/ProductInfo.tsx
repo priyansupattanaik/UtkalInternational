@@ -13,12 +13,14 @@ import {
   ImageBackground,
   Animated,
   Platform,
+  ScrollView,
 } from 'react-native';
 import {useRoute, useNavigation} from '@react-navigation/native';
 import {useFavorite} from '../utils/FavoriteContext';
 import {useAuth} from '../context/AuthContext';
 import {useCart} from '../context/CartContext';
 import {BlurView} from '@react-native-community/blur';
+import API_CONFIG from '../components/config';
 
 const {width, height} = Dimensions.get('window');
 
@@ -56,6 +58,14 @@ export default function ProductInfo() {
     [],
   );
 
+  // Format image URL correctly
+  const productImage = useMemo(() => {
+    if (!product.image) return null;
+    return product.image.startsWith('http')
+      ? product.image
+      : `${API_CONFIG.BASE_URL}${product.image}`;
+  }, [product.image]);
+
   // Animation values
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const slideUpAnim = React.useRef(new Animated.Value(30)).current;
@@ -65,7 +75,7 @@ export default function ProductInfo() {
     const animation = Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 400, // Faster animation for better performance
+        duration: 400,
         useNativeDriver: true,
       }),
       Animated.timing(slideUpAnim, {
@@ -116,6 +126,11 @@ export default function ProductInfo() {
     [navigation],
   );
 
+  // Handle wishlist toggle with feedback
+  const handleToggleFavorite = useCallback(() => {
+    toggleFavorite(product);
+  }, [toggleFavorite, product]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
@@ -141,12 +156,16 @@ export default function ProductInfo() {
           <TouchableOpacity
             style={styles.iconButton}
             onPress={handleGoBack}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
             <Image source={backIcon} style={styles.icon} tintColor="#FFFFFF" />
           </TouchableOpacity>
 
           <View style={styles.headerTitle}>
-            <Text style={styles.headerText} numberOfLines={1}>
+            <Text
+              style={styles.headerText}
+              numberOfLines={1}
+              ellipsizeMode="tail">
               PRODUCT DETAILS
             </Text>
           </View>
@@ -154,7 +173,8 @@ export default function ProductInfo() {
           <TouchableOpacity
             style={styles.iconButton}
             onPress={navigateToCart}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
             <Image source={cartIcon} style={styles.icon} tintColor="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -163,85 +183,114 @@ export default function ProductInfo() {
           {/* Product Image */}
           <Animated.View style={[styles.imageCard, animatedStyle]}>
             <Image
-              source={{uri: product.image}}
+              source={
+                productImage
+                  ? {uri: productImage}
+                  : require('../assets/images/producticons/All.png')
+              }
               style={styles.mainImage}
               resizeMode="contain"
+              defaultSource={require('../assets/images/producticons/All.png')}
+              fadeDuration={300}
             />
           </Animated.View>
 
-          {/* Product Details */}
-          <Animated.View style={[styles.detailsCard, animatedStyle]}>
-            {/* Title and Seller */}
-            <View style={styles.titleContainer}>
-              <Text style={styles.title} numberOfLines={1}>
-                {product.title}
-              </Text>
-              <View style={styles.sellerContainer}>
-                <Text style={styles.sellerLabel}>Seller:</Text>
-                <Text style={styles.sellerName}>
-                  {product.sellerName || 'Unknown'}
+          {/* Scrollable Product Details */}
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollViewContent}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            overScrollMode="never">
+            <Animated.View style={[styles.detailsCard, animatedStyle]}>
+              {/* Title and Seller */}
+              <View style={styles.titleContainer}>
+                <Text
+                  style={styles.title}
+                  numberOfLines={2}
+                  ellipsizeMode="tail">
+                  {product.title || 'Untitled Product'}
+                </Text>
+                <View style={styles.sellerContainer}>
+                  <Text style={styles.sellerLabel}>Seller:</Text>
+                  <Text
+                    style={styles.sellerName}
+                    numberOfLines={1}
+                    ellipsizeMode="tail">
+                    {product.sellerName || 'Unknown'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Price and Action Buttons */}
+              <View style={styles.priceContainer}>
+                <View style={styles.priceRow}>
+                  <View>
+                    <Text style={styles.priceLabel}>Price</Text>
+                    <Text style={styles.price}>
+                      ₹
+                      {typeof product.price === 'number'
+                        ? product.price.toLocaleString()
+                        : product.price}
+                    </Text>
+                  </View>
+
+                  <View style={styles.actionButtonsRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.wishlistButtonSmall,
+                        isFavorite && styles.wishlistButtonSmallActive,
+                      ]}
+                      onPress={handleToggleFavorite}
+                      activeOpacity={0.8}
+                      hitSlop={{top: 5, bottom: 5, left: 5, right: 5}}>
+                      <Image
+                        source={heartIcon}
+                        style={styles.buttonIcon}
+                        tintColor="#FFFFFF"
+                      />
+                      <Text style={styles.wishlistButtonSmallText}>
+                        {isFavorite ? 'Saved' : 'Save'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.addToCartButtonSmall}
+                      onPress={handleAddToCart}
+                      disabled={isAddingToCart}
+                      activeOpacity={0.8}
+                      hitSlop={{top: 5, bottom: 5, left: 5, right: 5}}>
+                      {isAddingToCart ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Image
+                            source={cartIcon}
+                            style={styles.buttonIcon}
+                            tintColor="#FFFFFF"
+                          />
+                          <Text style={styles.addToCartButtonSmallText}>
+                            Cart
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              {/* Description */}
+              <View style={styles.descriptionContainer}>
+                <Text style={styles.descriptionTitle}>Description</Text>
+                <Text style={styles.description}>
+                  {product.description || 'No description available.'}
                 </Text>
               </View>
-            </View>
 
-            {/* Price and Action Buttons */}
-            <View style={styles.priceContainer}>
-              <View style={styles.priceRow}>
-                <View>
-                  <Text style={styles.priceLabel}>Price</Text>
-                  <Text style={styles.price}>₹{product.price}</Text>
-                </View>
-
-                <View style={styles.actionButtonsRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.wishlistButtonSmall,
-                      isFavorite && styles.wishlistButtonSmallActive,
-                    ]}
-                    onPress={() => toggleFavorite(product)}
-                    activeOpacity={0.8}>
-                    <Image
-                      source={heartIcon}
-                      style={styles.buttonIcon}
-                      tintColor="#FFFFFF"
-                    />
-                    <Text style={styles.wishlistButtonSmallText}>
-                      {isFavorite ? 'Saved' : 'Save'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.addToCartButtonSmall}
-                    onPress={handleAddToCart}
-                    disabled={isAddingToCart}
-                    activeOpacity={0.8}>
-                    {isAddingToCart ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <Image
-                          source={cartIcon}
-                          style={styles.buttonIcon}
-                          tintColor="#FFFFFF"
-                        />
-                        <Text style={styles.addToCartButtonSmallText}>
-                          Cart
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            {/* Description */}
-            <View style={styles.descriptionContainer}>
-              <Text style={styles.descriptionTitle}>Description</Text>
-              <Text style={styles.description} numberOfLines={5}>
-                {product.description || 'No description available.'}
-              </Text>
-            </View>
-          </Animated.View>
+              {/* Add extra padding at the bottom for better scrolling */}
+              <View style={styles.bottomPadding} />
+            </Animated.View>
+          </ScrollView>
         </View>
       </ImageBackground>
     </SafeAreaView>
@@ -258,8 +307,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    paddingHorizontal: 0,
-    paddingBottom: 0,
   },
   overlayBackground: {
     ...StyleSheet.absoluteFillObject,
@@ -296,22 +343,26 @@ const styles = StyleSheet.create({
     height: 24,
   },
   imageCard: {
-    height: height * 0.35,
+    height: height * 0.38,
     padding: 0,
-    borderRadius: 0,
     overflow: 'hidden',
-    marginBottom: 0,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
   },
   mainImage: {
     width: '100%',
     height: '100%',
     alignSelf: 'center',
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    flexGrow: 1,
+  },
   detailsCard: {
     flex: 1,
     backgroundColor: 'rgba(40, 40, 40, 0.7)',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
     overflow: 'hidden',
     padding: 16,
   },
@@ -328,6 +379,7 @@ const styles = StyleSheet.create({
   sellerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
   sellerLabel: {
     fontSize: 14,
@@ -338,6 +390,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
+    flex: 1,
   },
   priceContainer: {
     backgroundColor: 'rgba(0, 122, 255, 0.15)',
@@ -417,5 +470,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: 'rgba(255, 255, 255, 0.8)',
+  },
+  bottomPadding: {
+    height: 80, // Extra padding at the bottom for better scrolling
   },
 });
